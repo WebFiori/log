@@ -175,4 +175,120 @@ class FileLoggerTest extends TestCase {
         $content = file_get_contents($this->logDir.DIRECTORY_SEPARATOR.'app-'.date('Y-m-d').'.log');
         $this->assertStringContainsString('[INFO] Direct log call', $content);
     }
+
+    /**
+     * @test
+     */
+    public function testLogFileNameFormat() {
+        $logger = new FileLogger($this->logDir);
+        $logger->info('test');
+
+        $expectedFile = $this->logDir.DIRECTORY_SEPARATOR.'app-'.date('Y-m-d').'.log';
+        $this->assertFileExists($expectedFile);
+    }
+    /**
+     * @test
+     */
+    public function testEachEntryEndsWithNewline() {
+        $logger = new FileLogger($this->logDir);
+        $logger->info('Line one');
+        $logger->info('Line two');
+
+        $content = file_get_contents($this->logDir.DIRECTORY_SEPARATOR.'app-'.date('Y-m-d').'.log');
+        $lines = explode("\n", trim($content));
+        $this->assertCount(2, $lines);
+    }
+    /**
+     * @test
+     */
+    public function testMinLevelBoundary() {
+        $logger = new FileLogger($this->logDir, LogLevel::WARNING);
+
+        // INFO is below WARNING — should be filtered
+        $logger->info('Below threshold');
+        // WARNING is at threshold — should pass
+        $logger->warning('At threshold');
+        // ERROR is above — should pass
+        $logger->error('Above threshold');
+
+        $content = file_get_contents($this->logDir.DIRECTORY_SEPARATOR.'app-'.date('Y-m-d').'.log');
+        $this->assertStringNotContainsString('Below threshold', $content);
+        $this->assertStringContainsString('At threshold', $content);
+        $this->assertStringContainsString('Above threshold', $content);
+    }
+    /**
+     * @test
+     */
+    public function testEmptyMessage() {
+        $logger = new FileLogger($this->logDir);
+        $logger->info('');
+
+        $content = file_get_contents($this->logDir.DIRECTORY_SEPARATOR.'app-'.date('Y-m-d').'.log');
+        $this->assertStringContainsString('[INFO] ', $content);
+        $this->assertMatchesRegularExpression('/\[INFO\] \n/', $content);
+    }
+    /**
+     * @test
+     */
+    public function testSpecialCharactersInMessage() {
+        $logger = new FileLogger($this->logDir);
+        $logger->info('User "admin" logged in from <script>alert(1)</script>');
+
+        $content = file_get_contents($this->logDir.DIRECTORY_SEPARATOR.'app-'.date('Y-m-d').'.log');
+        $this->assertStringContainsString('User "admin" logged in from <script>alert(1)</script>', $content);
+    }
+    /**
+     * @test
+     */
+    public function testNestedContextArray() {
+        $logger = new FileLogger($this->logDir);
+        $logger->info('Request', [
+            'headers' => ['Accept' => 'application/json'],
+            'body' => ['name' => 'John']
+        ]);
+
+        $content = file_get_contents($this->logDir.DIRECTORY_SEPARATOR.'app-'.date('Y-m-d').'.log');
+        $this->assertStringContainsString('"headers":{"Accept":"application/json"}', $content);
+        $this->assertStringContainsString('"body":{"name":"John"}', $content);
+    }
+    /**
+     * @test
+     */
+    public function testCriticalLevelNeverFiltered() {
+        $logger = new FileLogger($this->logDir, LogLevel::CRITICAL);
+        $logger->debug('Filtered');
+        $logger->info('Filtered');
+        $logger->warning('Filtered');
+        $logger->error('Filtered');
+        $logger->critical('Always passes');
+
+        $content = file_get_contents($this->logDir.DIRECTORY_SEPARATOR.'app-'.date('Y-m-d').'.log');
+        $lines = explode("\n", trim($content));
+        $this->assertCount(1, $lines);
+        $this->assertStringContainsString('Always passes', $content);
+    }
+    /**
+     * @test
+     */
+    public function testDebugLevelLogsEverything() {
+        $logger = new FileLogger($this->logDir, LogLevel::DEBUG);
+        $logger->debug('D');
+        $logger->info('I');
+        $logger->warning('W');
+        $logger->error('E');
+        $logger->critical('C');
+
+        $content = file_get_contents($this->logDir.DIRECTORY_SEPARATOR.'app-'.date('Y-m-d').'.log');
+        $lines = explode("\n", trim($content));
+        $this->assertCount(5, $lines);
+    }
+    /**
+     * @test
+     */
+    public function testTrailingSlashInLogDir() {
+        $dirWithSlash = $this->logDir . DIRECTORY_SEPARATOR;
+        $logger = new FileLogger($dirWithSlash);
+        $this->assertEquals($this->logDir, $logger->getLogDir());
+    }
+
 }

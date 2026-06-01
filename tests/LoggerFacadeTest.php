@@ -67,4 +67,34 @@ class LoggerFacadeTest extends TestCase {
         array_map('unlink', glob($logDir.DIRECTORY_SEPARATOR.'*'));
         rmdir($logDir);
     }
+
+    /**
+     * @test
+     */
+    public function testFacadeDefaultDirectory() {
+        $logger = LoggerFacade::getInstance();
+        $this->assertInstanceOf(FileLogger::class, $logger);
+        $expected = sys_get_temp_dir().DIRECTORY_SEPARATOR.'webfiori-logs';
+        $this->assertEquals($expected, $logger->getLogDir());
+    }
+    /**
+     * @test
+     */
+    public function testFacadeMinLevelRespected() {
+        $logDir = sys_get_temp_dir().DIRECTORY_SEPARATOR.'wf_facade_minlevel_'.getmypid();
+        LoggerFacade::setInstance(new FileLogger($logDir, LogLevel::ERROR));
+
+        LoggerFacade::debug('Should not appear');
+        LoggerFacade::info('Should not appear');
+        LoggerFacade::warning('Should not appear');
+        LoggerFacade::error('Should appear');
+
+        $content = file_get_contents($logDir.DIRECTORY_SEPARATOR.'app-'.date('Y-m-d').'.log');
+        $this->assertStringNotContainsString('Should not appear', $content);
+        $this->assertStringContainsString('Should appear', $content);
+
+        // Cleanup
+        array_map('unlink', glob($logDir.DIRECTORY_SEPARATOR.'*'));
+        rmdir($logDir);
+    }
 }
